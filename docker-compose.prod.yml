@@ -1,0 +1,60 @@
+version: "3.8"
+
+services:
+  marker-api:
+    container_name: marker-api
+    build:
+      # O contexto '.' funciona porque o Portainer executa a partir da raiz do repositório clonado
+      context: .
+      dockerfile: docker/Dockerfile.cpu.distributed-server
+    command: python distributed_server.py --host 0.0.0.0 --port 8080
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - marker-worker
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.marker-api.rule=Host(`marker.rpweb.site`)"
+      - "traefik.http.routers.marker-api.entrypoints=websecure"
+      - "traefik.http.routers.marker-api.tls.certresolver=cloudflare"
+      - "traefik.http.services.marker-api.loadbalancer.server.port=8080"
+
+  marker-worker:
+    container_name: marker-worker
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cpu.distributed-server
+    command: celery -A marker_api.celery_worker.celery_app worker --pool=solo -n worker_primary --loglevel=info
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    
+  marker-flower:
+    container_name: marker-flower
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cpu.distributed-server
+    command: celery -A marker_api.celery_worker.celery_app flower --port=5555
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+    depends_on:
+      - marker-api
+      - marker-worker
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.marker-flower.rule=Host(`markerstatus.rpweb.site`)"
+      - "traefik.http.routers.marker-flower.entrypoints=websecure"
+      - "traefik.http.routers.marker-flower.tls.certresolver=cloudflare"
+      - "traefik.http.services.marker-flower.loadbalancer.server.port=5555"
+
+networks:
+  web:
+    external: true
