@@ -1,8 +1,10 @@
 # Use a base image with Python
 FROM python:3.11-slim
 
-# Install system dependencies required for libGL
+# Força o apt-get a usar IPv4 para evitar problemas de rede no build
 RUN apt-get -o Acquire::ForceIPv4=true update
+
+# A linha de instalação permanece como está
 RUN apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
